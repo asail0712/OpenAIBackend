@@ -3,9 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 
-using WebSocketEchoServer.Common;
-
-namespace WebSocketEchoServer.Websocket
+namespace XPlan.WebSockets
 {
     // 連線管理 + 簡單路由
 

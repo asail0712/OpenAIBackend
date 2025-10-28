@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using WebSocketEchoServer.Common;
 
+using XPlan.WebSockets;
+
 namespace WebSocketEchoServer.Websocket
 {
     public class AudioEchoWsHub : WebsocketBase
@@ -52,10 +54,12 @@ namespace WebSocketEchoServer.Websocket
             }
         }
 
-        override public Task HandleBinaryAsync(string fromUid, byte[] bytes)
+        override public async Task HandleBinaryAsync(string fromUid, byte[] bytes)
         {
-            // 範例：把二進位資料回送或轉發（如音訊流）
-            return BroadcastBinaryAsync(bytes);
+            if (TryGetValue(fromUid, out var ws) && ws.State == WebSocketState.Open)
+            {
+                await SendBinaryAsync(ws, bytes); // 只送一包 Binary
+            }                
         }
     }
 }
