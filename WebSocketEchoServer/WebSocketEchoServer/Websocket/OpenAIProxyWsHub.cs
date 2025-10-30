@@ -10,17 +10,18 @@ namespace WebSocketEchoServer.Websocket
 {
     public static class AudioMsgTypes
     {
-        public const string Send    = "audio.send";     // client -> server
-        public const string Receive = "audio.receive";  // server -> client
-        public const string Flush   = "audio.flush";    // (可選) client 告知一段結束
+        public const string Send                = "audio.Send";             // client -> server
+        public const string InterruptReceive    = "audio.InterruptReceive"; // client -> server
+        public const string ReceiveAudio        = "audio.ReceiveAudio";     // server -> client
+        public const string ReceiveText         = "audio.ReceiveText";      // server -> client
     }
 
-    public class AudioMessage
+    public class AIMessage
     {
         public string Type { get; set; }        = string.Empty;
 
-        // Base64 編碼的 PCM16 音訊資料
-        public string AudioBase64 { get; set; } = string.Empty;
+        // Base64 編碼的 PCM16 音訊資料 或是文字資料
+        public string Payload { get; set; }     = string.Empty;
     }
 
     public class OpenAIProxyOptions
@@ -67,15 +68,22 @@ namespace WebSocketEchoServer.Websocket
             // 綁定回傳事件：把 OpenAI 的輸出回推 client
             //rt.OnResposeStart       += () => TrySend(uid, new { type = "response.start" });
             //rt.OnResposeFinish      += () => TrySend(uid, new { type = "response.finish" });
-            //rt.OnAssistantTextDelta += (txt) => TrySend(uid, new { type = "assistant.text.delta", payload = new { text = txt } });
-            //rt.OnAssistantTextDone  += (txt) => TrySend(uid, new { type = "assistant.text.done", payload = new { text = txt } });
-
-            // 音訊：以 binary（raw PCM16）回推給 client；若你偏好 base64，也可以改成文字訊息
-            rt.OnAssistantAudioDelta += (bytes) =>
+            rt.OnAssistantTextDelta     += (txt) =>
             {
                 TrySend(uid, new 
                 { 
-                    Type        = AudioMsgTypes.Receive,
+                    Type    = AudioMsgTypes.ReceiveText, 
+                    Payload = txt
+                });
+            };
+            //rt.OnAssistantTextDone  += (txt) => TrySend(uid, new { type = "assistant.text.done", payload = new { text = txt } });
+
+            // 音訊：以 binary（raw PCM16）回推給 client；若你偏好 base64，也可以改成文字訊息
+            rt.OnAssistantAudioDelta    += (bytes) =>
+            {
+                TrySend(uid, new 
+                { 
+                    Type        = AudioMsgTypes.ReceiveAudio,
                     AudioBase64 = Convert.ToBase64String(bytes),
                 });
             };
@@ -88,7 +96,7 @@ namespace WebSocketEchoServer.Websocket
             var ok = await rt.ConnectAndConfigure(ct);
             if (!ok)
             {
-                TrySend(uid, new { type = "error", payload = new { message = "openai_connect_failed" } });
+                TrySend(uid, new { Type = "error", Payload = "openai_connect_failed" });
                 await Cleanup(uid, rt);
                 return;
             }
@@ -127,16 +135,16 @@ namespace WebSocketEchoServer.Websocket
         {
             if (!_rtByUid.TryGetValue(fromUid, out var rt) || rt is null || !rt.IsConnected())
             {
-                TrySend(fromUid, new { type = "error", payload = new { message = "realtime_not_ready" } });
+                TrySend(fromUid, new { Type = "error", Payload = "realtime_not_ready" } );
                 return;
             }
 
-            AudioMessage? env;
-            try { env = JsonSerializer.Deserialize<AudioMessage>(json); }
+            AIMessage? env;
+            try { env = JsonSerializer.Deserialize<AIMessage>(json); }
             catch
             {
                 if (TryGetValue(fromUid, out var ws))
-                    await SendAsync(ws, new { type = "error", payload = new { message = "invalid_json" } });
+                    await SendAsync(ws, new { Type = "error", Payload = "invalid_json" } );
                 return;
             }
 
@@ -147,12 +155,17 @@ namespace WebSocketEchoServer.Websocket
                 // 用戶傳純文字 -> 要求助理生成（text + audio）
                 case AudioMsgTypes.Send:
                     {
-                        if (string.IsNullOrWhiteSpace(env.AudioBase64))
+                        if (string.IsNullOrWhiteSpace(env.Payload))
                         {
                             return;
                         }
 
-                        await rt.SendAudioBase64Async(env?.AudioBase64!);
+                        await rt.SendAudioBase64Async(env?.Payload!);
+                        break;
+                    }
+                case AudioMsgTypes.InterruptReceive:
+                    {
+                        await rt.BargeInAsync(0f);
                         break;
                     }
             }

@@ -221,7 +221,7 @@ namespace WebSocketEchoServer.Websocket
             return SendAsync(new { type = "input_audio_buffer.append", audio = audioBase64 });
         }
 
-        public Task InterruptAsync()
+        private Task InterruptAsync()
         {
             // 取消正在產生中（語音/文字）的回覆
             return SendAsync(new { type = "response.cancel" }); // 無參數即可
