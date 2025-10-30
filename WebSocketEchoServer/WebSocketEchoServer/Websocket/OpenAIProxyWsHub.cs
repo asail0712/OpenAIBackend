@@ -1,15 +1,17 @@
 ﻿using System.Collections.Concurrent;
 using System.Net.WebSockets;
-using System.Text;
 using System.Text.Json;
-using Newtonsoft.Json.Linq; // 只用於日誌/安全保險
-using WebSocketEchoServer.Common;
+
 using XPlan.WebSockets;
 
 namespace WebSocketEchoServer.Websocket
 {
     public static class AudioMsgTypes
     {
+        public const string Start               = "audio.Start";            // server -> client
+        public const string Finish              = "audio.Finish";           // server -> client
+        public const string Logging             = "audio.Logging";           // server -> client
+
         public const string Send                = "audio.Send";             // client -> server
         public const string InterruptReceive    = "audio.InterruptReceive"; // client -> server
         public const string ReceiveAudio        = "audio.ReceiveAudio";     // server -> client
@@ -66,9 +68,21 @@ namespace WebSocketEchoServer.Websocket
             );
 
             // 綁定回傳事件：把 OpenAI 的輸出回推 client
-            //rt.OnResposeStart       += () => TrySend(uid, new { type = "response.start" });
-            //rt.OnResposeFinish      += () => TrySend(uid, new { type = "response.finish" });
-            rt.OnAssistantTextDelta     += (txt) =>
+            rt.OnResposeStart       += () =>
+            {
+                TrySend(uid, new 
+                { 
+                    Type = AudioMsgTypes.Start,
+                });
+            };
+            rt.OnResposeFinish      += () =>
+            {
+                TrySend(uid, new 
+                {
+                    Type = AudioMsgTypes.Finish,
+                });
+            };
+            rt.OnAssistantTextDelta += (txt) =>
             {
                 TrySend(uid, new 
                 { 
@@ -84,13 +98,20 @@ namespace WebSocketEchoServer.Websocket
                 TrySend(uid, new 
                 { 
                     Type        = AudioMsgTypes.ReceiveAudio,
-                    AudioBase64 = Convert.ToBase64String(bytes),
+                    Payload     = Convert.ToBase64String(bytes),
                 });
             };
             //rt.OnAssistantAudioDone     += (_) => TrySend(uid, new { type = "assistant.audio.done" });
 
             // 伺服器端除錯訊息
-            rt.OnLoggingDone        += (lvl, msg) => TrySend(uid, new { type = "server.log", payload = new { level = lvl.ToString(), message = msg } });
+            rt.OnLoggingDone += (lvl, msg) =>
+            {
+                TrySend(uid, new
+                {
+                    Type    = AudioMsgTypes.Logging,
+                    Payload = $"[{lvl.ToString()}] {msg}"
+                });
+            };
 
             // 3) 連線 OpenAI Realtime（綁定相同取消權）
             var ok = await rt.ConnectAndConfigure(ct);
