@@ -18,7 +18,7 @@ var instructions    = builder.Configuration["OpenAI:OPENAI_RT_INSTRUCTIONS"] ?? 
 var autoCreateRes   = bool.TryParse(builder.Configuration["OpenAI:OPENAI_RT_AUTO_CREATE"], out var b) && b;
 var cts             = new CancellationTokenSource();
 
-builder.Services.AddSingleton(cts);
+builder.Services.AddSingleton(cts);                 // 目的為了 可以被其他物件使用
 builder.Services.AddSingleton(new OpenAIProxyOptions
 {
     ApiKey              = apiKey,
@@ -28,9 +28,7 @@ builder.Services.AddSingleton(new OpenAIProxyOptions
     AutoCreate          = autoCreateRes,
     ct                  = cts.Token
 });
-
-// 你的 WsHub（繼承 WebsocketBase）
-builder.Services.AddSingleton<OpenAIProxyWsHub>();
+builder.Services.AddSingleton<OpenAIProxyWsHub>();  // 你的 WsHub（繼承 WebsocketBase）
 
 var app = builder.Build();
 
@@ -40,8 +38,6 @@ var wsOptions = new WebSocketOptions
     KeepAliveInterval = TimeSpan.FromSeconds(20),
     ReceiveBufferSize = 64 * 1024
 };
-// 可選：限制允許的 Origin
-// wsOptions.AllowedOrigins.Add("https://your-frontend.example.com");
 
 app.UseWebSockets(wsOptions);
 

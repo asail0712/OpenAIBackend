@@ -14,7 +14,7 @@ namespace XPlan.WebSockets
         virtual public Task AddAsync(string uid, WebSocket ws)
         {
             _peers[uid] = ws;
-            return SendAsync(ws, new { Type = "welcome", Payload = new { uid } });
+            return Task.CompletedTask;
         }
 
         virtual public Task RemoveAsync(string uid)

@@ -131,6 +131,8 @@ namespace WebSocketEchoServer.Websocket
             }
 
             _rtByUid[uid] = rt;
+
+            await SendAsync(clientSocket, new { Type = "welcome", Payload = new { uid } });
         }
 
         public override Task RemoveAsync(string uid)
@@ -174,8 +176,7 @@ namespace WebSocketEchoServer.Websocket
             try { env = JsonSerializer.Deserialize<AIMessage>(json); }
             catch
             {
-                if (TryGetValue(fromUid, out var ws))
-                    await SendAsync(ws, new { Type = "error", Payload = "invalid_json" } );
+                TrySend(fromUid, new { Type = "error", Payload = "invalid_json" } );
                 return;
             }
 

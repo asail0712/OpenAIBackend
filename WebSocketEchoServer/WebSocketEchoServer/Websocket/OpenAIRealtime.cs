@@ -1,13 +1,8 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
-using XPlan.WebSockets;
 
 namespace WebSocketEchoServer.Websocket
 {
@@ -67,14 +62,14 @@ namespace WebSocketEchoServer.Websocket
         public event Action<string> OnAssistantTextDelta;
         public event Action<string> OnAssistantTextDone;
         public event Action<byte[]> OnAssistantAudioDelta;
-        public event Action<byte[]> OnAssistantAudioDone;
+        public event Action OnAssistantAudioDone;
         public event Action<DebugLevel, string> OnLoggingDone;
         private bool bEventAsync = false;
 
         // ===============================
         // lifecycle
         // ===============================    
-        public OpenAIRealtime(string openAIApiKey, string model, string voice, string basicInstructions, bool bAutoCreateResponse, bool bEventAsync = true)
+        public OpenAIRealtime(string openAIApiKey, string model, string voice, string basicInstructions, bool bAutoCreateResponse, bool bEventAsync = false)
         {
             this.openAIApiKey           = openAIApiKey;
             this.model                  = model;
@@ -108,8 +103,6 @@ namespace WebSocketEchoServer.Websocket
         private async Task CloseAsync(string reason, bool bForce = false)
         {
             if (bDisposed) return;
-
-            // 停新活
             bConnected = false;
 
             // 不等待接收結束 直接強制關閉
@@ -227,7 +220,7 @@ namespace WebSocketEchoServer.Websocket
             return SendAsync(new { type = "response.cancel" }); // 無參數即可
         }
 
-        // audioEndMs：你本地端實際「已播放」到的毫秒數（用播放過的 sample 數換算）
+        // audioEndMs：本地端實際「已播放」到的毫秒數（用播放過的 sample 數換算）
         public Task TruncateAsync(int audioEndMs, int? contentIndex = null)
         {
             if (string.IsNullOrEmpty(_activeAssistantItemId)) return Task.CompletedTask;
@@ -468,7 +461,7 @@ namespace WebSocketEchoServer.Websocket
                     }
                 case "response.output_audio.done":
                     {
-                        EmitOnMain(() => OnAssistantAudioDone?.Invoke(Array.Empty<byte>()));
+                        EmitOnMain(() => OnAssistantAudioDone?.Invoke());
                         return;
                     }
 
