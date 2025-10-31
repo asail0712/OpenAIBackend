@@ -2,7 +2,6 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using WebSocketEchoServer.Common;
 
 using XPlan.WebSockets;
 
@@ -20,36 +19,36 @@ namespace WebSocketEchoServer.Websocket
             catch
             {
                 if (TryGetValue(fromUid, out var ws))
-                    await SendAsync(ws, new { type = "error", payload = new { message = "invalid_json" } });
+                    await SendAsync(ws, new { Type = "error", Payload = new { message = "invalid_json" } });
                 return;
             }
 
-            switch (env?.type)
+            switch (env?.Type)
             {
                 case "echo":
                     if (TryGetValue(fromUid, out var ws))
-                        await SendAsync(ws, new { type = "echo", env.payload });
+                        await SendAsync(ws, new { Type = "echo", env.Payload });
                     break;
 
                 case "broadcast":
-                    await BroadcastAsync(new { type = "broadcast", payload = new { from = fromUid, data = env.payload } });
+                    await BroadcastAsync(new { Type = "broadcast", Payload = new { from = fromUid, data = env.Payload } });
                     break;
 
                 case "dm":
                     // 直接訊息：payload 需包含 to, data
-                    if (env.payload is JsonElement p &&
+                    if (env.Payload is JsonElement p &&
                         p.TryGetProperty("to", out var to) &&
                         p.TryGetProperty("data", out var data))
                     {
                         var toUid = to.GetString();
                         if (!string.IsNullOrEmpty(toUid) && TryGetValue(toUid, out var dst))
-                            await SendAsync(dst, new { type = "dm", payload = new { from = fromUid, data } });
+                            await SendAsync(dst, new { Type = "dm", Payload = new { from = fromUid, data } });
                     }
                     break;
 
                 default:
                     if (TryGetValue(fromUid, out var ws2))
-                        await SendAsync(ws2, new { type = "error", payload = new { message = "unknown_type" } });
+                        await SendAsync(ws2, new { Type = "error", Payload = new { message = "unknown_type" } });
                     break;
             }
         }

@@ -33,6 +33,7 @@ namespace WebSocketEchoServer.Websocket
         public string Voice { get; set; }               = "alloy";
         public string BasicInstructions { get; set; }   = "You are a helpful, concise voice assistant.";
         public bool AutoCreate { get; set; }            = false;
+        public CancellationToken ct { get; set; }
     }
 
     /// <summary>
@@ -42,20 +43,27 @@ namespace WebSocketEchoServer.Websocket
     public class OpenAIProxyWsHub : WebsocketBase
     {
         private readonly OpenAIProxyOptions _opt;
+        private readonly CancellationToken _ct;
         private readonly ConcurrentDictionary<string, OpenAIRealtime> _rtByUid = new();
 
         public OpenAIProxyWsHub(OpenAIProxyOptions opt)
         {
-            _opt = opt;
+            _opt    = opt;
+            _ct     = opt.ct;
         }
 
         /// <summary>
         /// 外部路由呼叫：註冊 client socket，建立上游 OpenAIRealtime，然後交給基底的接收迴圈（HandleText/HandleBinary）處理。
         /// </summary>
-        override public async Task AddAsync(string uid, WebSocket clientSocket, CancellationToken ct)
+        override public async Task AddAsync(string uid, WebSocket clientSocket)
         {
+            if (_rtByUid.TryRemove(uid, out var oldRt))
+            {
+                try { oldRt.Dispose(); } catch { }
+            }
+
             // 1) 註冊 client
-            await base.AddAsync(uid, clientSocket, ct);
+            await base.AddAsync(uid, clientSocket);
 
             // 2) 建立 & 連線 OpenAIRealtime（和 client 同壽終）
             var rt = new OpenAIRealtime(
@@ -64,7 +72,7 @@ namespace WebSocketEchoServer.Websocket
                 voice:                  _opt.Voice,
                 basicInstructions:      _opt.BasicInstructions,
                 bAutoCreateResponse:    _opt.AutoCreate,
-                bEventAsync:            true
+                bEventAsync:            false
             );
 
             // 綁定回傳事件：把 OpenAI 的輸出回推 client
@@ -114,7 +122,7 @@ namespace WebSocketEchoServer.Websocket
             };
 
             // 3) 連線 OpenAI Realtime（綁定相同取消權）
-            var ok = await rt.ConnectAndConfigure(ct);
+            var ok = await rt.ConnectAndConfigure(_ct);
             if (!ok)
             {
                 TrySend(uid, new { Type = "error", Payload = "openai_connect_failed" });
@@ -123,17 +131,19 @@ namespace WebSocketEchoServer.Websocket
             }
 
             _rtByUid[uid] = rt;
+        }
 
-            // 4) 等到 client 結束（AddAsync 內部應會在 client 斷線時返回）
-            try
+        public override Task RemoveAsync(string uid)
+        {
+            Task task = base.RemoveAsync(uid);
+
+            // 關閉並移除 RT
+            if (_rtByUid.TryRemove(uid, out var rt))
             {
-                // 交給基底的接收循環：會觸發 HandleTextAsync / HandleBinaryAsync
-                await PumpUntilClosed(uid, clientSocket, ct);
+                try { rt.Dispose(); } catch { /* log if needed */ }
             }
-            finally
-            {
-                await Cleanup(uid, rt);
-            }
+
+            return task;
         }
 
         private async Task Cleanup(string uid, OpenAIRealtime rt)
@@ -189,22 +199,6 @@ namespace WebSocketEchoServer.Websocket
                         await rt.BargeInAsync(0f);
                         break;
                     }
-            }
-        }
-
-        // -----------------------------------------
-        // 工具：交給基底層去跑接收循環（名稱依你的 WebsocketBase 而定）
-        // 有些實作會直接在 AddAsync 內部跑到關閉；若你的基底已包好，可改成只呼叫 AddAsync。
-        // -----------------------------------------
-        private async Task PumpUntilClosed(string uid, WebSocket socket, CancellationToken ct)
-        {
-            // 這裡假設 WebsocketBase 內部實作會在 client 關閉時 return。
-            // 若你的 Base 已經在 AddAsync 裡面處理整個循環，可改為：
-            //   await AddAsync(uid, socket);
-            // 然後移除此方法的呼叫。
-            while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
-            {
-                await Task.Delay(100, ct);
             }
         }
     }

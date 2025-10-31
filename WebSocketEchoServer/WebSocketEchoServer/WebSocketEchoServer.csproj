@@ -15,4 +15,8 @@
     <ProjectReference Include="..\XPlan\XPlan.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Common\" />
+  </ItemGroup>
+
 </Project>

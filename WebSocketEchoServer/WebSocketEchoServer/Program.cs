@@ -16,14 +16,17 @@ var model           = builder.Configuration["OpenAI:OPENAI_REALTIME_MODEL"] ?? "
 var voice           = builder.Configuration["OpenAI:OPENAI_REALTIME_VOICE"] ?? "alloy";
 var instructions    = builder.Configuration["OpenAI:OPENAI_RT_INSTRUCTIONS"] ?? "You are a helpful, concise voice assistant.";
 var autoCreateRes   = bool.TryParse(builder.Configuration["OpenAI:OPENAI_RT_AUTO_CREATE"], out var b) && b;
+var cts             = new CancellationTokenSource();
 
+builder.Services.AddSingleton(cts);
 builder.Services.AddSingleton(new OpenAIProxyOptions
 {
     ApiKey              = apiKey,
     Model               = model,
     Voice               = voice,
     BasicInstructions   = instructions,
-    AutoCreate          = autoCreateRes
+    AutoCreate          = autoCreateRes,
+    ct                  = cts.Token
 });
 
 // 你的 WsHub（繼承 WebsocketBase）

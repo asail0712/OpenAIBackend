@@ -11,10 +11,10 @@ namespace XPlan.WebSockets
     {
         private readonly ConcurrentDictionary<string, WebSocket> _peers = new();
 
-        virtual public Task AddAsync(string uid, WebSocket ws, CancellationToken ct = default)
+        virtual public Task AddAsync(string uid, WebSocket ws)
         {
             _peers[uid] = ws;
-            return SendAsync(ws, new { type = "welcome", payload = new { uid } });
+            return SendAsync(ws, new { Type = "welcome", Payload = new { uid } });
         }
 
         virtual public Task RemoveAsync(string uid)
